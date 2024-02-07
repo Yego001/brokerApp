@@ -1,0 +1,176 @@
+{% extends '../base.html' %} {% block content %}
+
+    <div class="mx-auto h-auto max-w-7xl flex align-center justify-center flex-col">
+        {% include './update_allocations.html' with year=year number=number %}
+        <div class="mx-auto max-w-3xl bg-white rounded-lg border-gray-300 p-6">
+            {% include './update_lot_number.html' with lot_number=lot_number %}
+            {% csrf_token %}
+            <div class="flex items-center justify-center flex-col max-w-2xl mx-auto">
+                <div class="grid grid-cols-5 p-3 mt-3 rounded-lg bg-blue-500 text-white w-3xl">
+                    <p class="col-span-3 text-right flex content-center justify-center flex-col">Reprints Placement:</p>
+                    <select class="col-span-2 py-1 px-4 mx-4 rounded-md text-black outline-none focus:outline-gray-300 focus:shadow-2xl" id="reprint_placement">
+                        <option value="last">Last</option>
+                        <option value="first">First</option>
+                    </select>
+                </div>
+                <p id="generate-alert-message" class="mt-2 mb-4"></p>
+                <button
+                    id="generate-catalogue-ctx"
+                    class="py-2 px-4 my-4 w-full max-w-lg bg-blue-600 hover:bg-blue-700 focus:ring-blue-500 focus:ring-offset-blue-200 text-white transition ease-in duration-200 text-center text-base font-semibold shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 rounded-lg">
+                    Generate Catalogue
+                </button>
+                <p id="delete-alert-message" class="mt-2 mb-4"></p>
+                <input name="__auction-id" type="hidden" value="{{id_}}"/>
+                <button
+                    id="delete-catalogue-ctx"
+                    class="py-2 px-4 mb-4 w-full max-w-lg bg-red-600 hover:bg-red-700 focus:ring-red-500 focus:ring-offset-red-200 text-white transition ease-in duration-200 text-center text-base font-semibold shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 rounded-lg">
+                    <i class="fa fa-trash-alt mr-2 text-white text-lg"></i>
+                    Delete all generated catalogues
+                </button>
+            </div>
+            {% include './catalogues.html' with catalogues=data.catalogue %}
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        $(document).ready(function (e) {
+            function BoundAllow(v){
+                if(v == 0 || v == '' || !v > 0 || typeof Number(v) != 'number'){
+                    return false
+                }
+                else {
+                    return true
+                }
+            }
+            $('#delete-catalogue-ctx').on('click', function(){
+                var form_data = new FormData();
+                msg_alert = $('#delete-alert-message');
+                auction_id = $(this).siblings('input[name="__auction-id"]').val();
+                csrf_token = $('input[name="csrfmiddlewaretoken"]').val();
+                forms_number = $('input[name="catalogue-file"]').length;
+                form_data.append("csrfmiddlewaretoken", csrf_token);
+                form_data.append("auction_id", auction_id);
+                self = $(this)
+                forms_number >= 1 ? (
+                    self.html('<i class="fa fa-spin fa-spinner"></i> Deleting'),
+                    setTimeout(() => {
+                        $.ajax({
+                            url: '/delete_catalogue_data',
+                            dataType: 'json',
+                            cache: false,
+                            contentType: false,
+                            processData: false,
+                            data: form_data,
+                            type: 'post',
+                            success: function (response) {
+                                self.html('Delete all generated catalogues')
+                                msg_alert.html(response.msg);
+                                setTimeout(() => {
+                                    window.location = window.location;
+                                }, 2000)
+                            },
+                            error: function (response) {
+                                msg_alert.html(response.message);
+                            }
+                        })
+                    }, 2000)
+                ) : (
+                    $(this).html('No catalogues to delete'),
+                    setTimeout(() => {
+                        $(this).html('Delete all generated catalogues')
+                    }, 3000)
+                )
+            });
+            $('#generate-catalogue-ctx').on('click', function(){
+                var self = $(this);
+                buttons = $('.button-update-allocation');
+                data_layers = []
+                left_bounds = []
+                generate_data = []
+                buttons.length == 0 ? $('#generate-catalogue-ctx').attr('disabled', true) : ''
+                for(var i = 0; i < buttons.length; i++){
+                    pass_data = {}
+                    title_field = buttons.eq(i).parent('.form-complete').siblings('.form-input').children('.form-title-layer').children('input[name="title-layer"]');
+                    left_field = buttons.eq(i).parent('.form-complete').siblings('.form-input').children('.form-left-bound').children('input[name="left-bound"]');
+                    file_field = buttons.eq(i).parent('.form-complete').siblings('.form-file').children('.form-file-data').children('input[name="allocation-name"]');
+    
+                    title_layer = title_field.val()
+                    left_bound = left_field.val()
+                    file = file_field.val()
+                    id = buttons.eq(i).siblings('input[name="allocation-id"]').val();
+                    auction_id = buttons.eq(i).siblings('input[name="id"]').val();
+    
+                    data_layers.push(title_layer)
+                    left_bounds.push(left_bound)
+    
+                    pass_data.data_layer = title_layer
+                    pass_data.left_bound = left_bound
+                    pass_data.file = file
+                    pass_data.id = id
+                    pass_data.auction_id = auction_id
+    
+                    generate_data.push(pass_data)
+                }
+
+                var form_data = new FormData();
+                msg_alert = $('#generate-alert-message')
+                csrf_token = $('input[name="csrfmiddlewaretoken"]').val();
+                reprint_placement = $('#reprint_placement').val()
+
+                form_data.append("csrfmiddlewaretoken", csrf_token);
+                form_data.append("auction_id", auction_id);
+                form_data.append("reprint_placement", reprint_placement);
+                form_data.append("id", id);
+                form_data.append("data", JSON.stringify(generate_data));
+    
+                console.log(generate_data)
+
+                bounds = [...left_bounds, ...data_layers];
+
+                console.log(bounds)
+
+                for(var i = 0; i < bounds.length; i++){
+                    if(!BoundAllow(bounds[i])){
+                        allow = false
+                        break
+                    }
+                    else allow = true
+                }
+    
+                allow ?
+                    (
+                        self.attr({'disabled': 'disabled'}),
+                        self.html('<i class="fa fa-spin fa-spinner"></i> Generating'),
+                        $.ajax({
+                            url: '/generate_catalogue',
+                            dataType: 'json',
+                            cache: false,
+                            contentType: false,
+                            processData: false,
+                            data: form_data,
+                            type: 'post',
+                            success: function (response) {
+                                self.removeAttr('disabled')
+                                self.html('Generate Catalogue')
+                                msg_alert.html(response.msg);
+                                setTimeout(() => {
+                                    window.location = window.location;
+                                }, 2000)
+                            },
+                            error: function (response) {
+                                msg_alert.html(response.msg);
+                            }
+                        })
+                    )
+                : (
+                    msg_alert.html('<span class="text-red-500">*Ensure all left bound and title layer fields have a value greater than 0</span>'),
+                    setTimeout(() => {
+                        msg_alert.html('')
+                    }, 5000)
+                )
+    
+            })
+        });
+    </script>
+
+{% endblock content %}
